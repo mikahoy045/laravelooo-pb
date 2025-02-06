@@ -25,7 +25,7 @@ You'll need to have AWS S3 key that have been set up in your environment variabl
 
 1. Clone the repository
 ```bash
-git clone git@github.com:mikahoy045/laravelooo-pr.git
+git clone https://github.com/mikahoy045/laravelooo-pb
 ```
 
 2. Build Docker Image
@@ -40,13 +40,13 @@ docker compose up -d
 
 All the dependencies will be installed automatically, and the Application would be available at:
 ```bash
-http://localhost:8080
+http://localhost:8000
 ```
 
 ## API Documentation
 
 You can access the Swagger API documentation by running the container and accessing the link below:
 ```bash
-http://localhost:8080/api/documentation
+http://localhost:8000/api/documentation
 ```
 
