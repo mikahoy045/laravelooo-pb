@@ -1,0 +1,138 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ main, staging ]    
+  pull_request:
+    branches: [ main, staging ]
+  workflow_dispatch:
+      
+jobs:
+  test:
+    if: github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Create .env file
+      run: |
+        echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> .env.testing
+        echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> .env.testing
+        echo "AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}" >> .env.testing
+        echo "AWS_BUCKET=${{ secrets.AWS_BUCKET }}" >> .env.testing
+        echo "AWS_USE_PATH_STYLE_ENDPOINT=${{ secrets.AWS_USE_PATH_STYLE_ENDPOINT }}" >> .env.testing
+        echo "APP_KEY=" >> .env.testing
+        echo "APP_NAME=laravelooo-pr-test-1" >> .env.testing
+        echo "APP_DEBUG=true" >> .env.testing
+        echo "APP_ENV=testing" >> .env.testing
+        echo "DB_CONNECTION=mysql" >> .env.testing
+        echo "DB_HOST=test-db" >> .env.testing
+        echo "DB_DATABASE=testing" >> .env.testing
+        echo "DB_USERNAME=root" >> .env.testing
+        echo "DB_PASSWORD=pr0ject" >> .env.testing
+        echo "CACHE_DRIVER=array" >> .env.testing
+        echo "SESSION_DRIVER=array" >> .env.testing
+        echo "QUEUE_CONNECTION=sync" >> .env.testing
+        echo "REDIS_HOST=test-redis" >> .env.testing
+        echo "REDIS_CLIENT=phpredis" >> .env.testing
+    
+    - name: Build and test
+      id: test
+      run: |
+        docker compose -f docker-compose.test.yml up -d
+        
+        sleep 10
+        
+        docker exec laravelooo-pr-test-1 php artisan migrate:fresh
+        docker exec laravelooo-pr-test-1 php artisan key:generate
+                
+        echo "Creating roles and users..."
+        docker exec laravelooo-pr-test-1 php artisan tinker --execute="App\Models\Role::factory()->create();"
+        docker exec laravelooo-pr-test-1 php artisan tinker --execute="App\Models\Role::factory()->designer()->create();"
+        docker exec laravelooo-pr-test-1 php artisan tinker --execute="App\Models\Role::factory()->manager()->create();"
+        docker exec laravelooo-pr-test-1 php artisan tinker --execute="App\Models\User::factory()->admin()->create();"
+        docker exec laravelooo-pr-test-1 php artisan tinker --execute="App\Models\User::factory()->user()->create();"
+                
+        echo "Verifying users..."
+        docker exec laravelooo-pr-test-1 php artisan tinker --execute="App\Models\User::count();"
+                
+        docker exec laravelooo-pr-test-1 php artisan route:clear
+        echo "Verifying routes..."
+        docker exec laravelooo-pr-test-1 php artisan route:list | grep auth
+        
+        docker exec laravelooo-pr-test-1 php artisan config:cache
+                
+        docker exec -d laravelooo-pr-test-1 php artisan serve --host=0.0.0.0 --port=8000
+        sleep 5
+                
+        echo "Testing auth endpoint..."
+        docker exec laravelooo-pr-test-1 curl -X POST http://laravelooo-pr-test-1:8000/api/login \
+          -H "Content-Type: application/json" \
+          -H "Accept: application/json" \
+          -d '{"email":"adminlaravelooo@gmail.com","password":"securepassword"}'
+                
+        docker exec laravelooo-pr-test-1 php artisan test --testsuite=Feature
+        
+        echo "test_exit_code=$(echo $?)" >> $GITHUB_OUTPUT
+
+    - name: Cleanup
+      if: always()
+      run: docker compose -f docker-compose.test.yml down
+
+    - name: Check test result
+      if: steps.test.outputs.test_exit_code != '0'
+      run: exit 1
+
+  deploy-staging:
+    needs: test
+    if: github.ref == 'refs/heads/staging' && needs.test.result == 'success'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Deploy to staging
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.HOSTINGER_IP }}
+        username: ${{ secrets.HOSTINGER_USERNAME }}
+        password: ${{ secrets.HOSTINGER_PASSWORD }}
+        script: |
+          cd /var/www/staging.laravelooo.run.place/staging
+          git pull origin staging
+          cp .env.staging .env
+          docker compose -f docker-compose-staging.yml down
+          docker compose -f docker-compose-staging.yml up -d --build
+          
+          docker exec -t laravelooo_app_staging chown -R www-data:www-data /var/www/storage
+          docker exec -t laravelooo_app_staging chmod -R 775 /var/www/storage
+          docker exec -t laravelooo_app_staging chmod -R 775 /var/www/bootstrap/cache
+
+          docker exec -t laravelooo_app_staging composer install --no-interaction --optimize-autoloader --no-dev
+          docker exec -t laravelooo_app_staging php artisan migrate --force
+          docker exec -t laravelooo_app_staging php artisan config:cache
+          docker exec -t laravelooo_app_staging php artisan route:cache
+          docker exec -t laravelooo_app_staging php artisan view:cache
+
+  deploy-production:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+      - name: Deploy to production
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOSTINGER_IP }}
+          username: ${{ secrets.HOSTINGER_USERNAME }}
+          password: ${{ secrets.HOSTINGER_PASSWORD }}
+          script: |
+            cd /var/www/laravelooo.run.place/production
+            git pull origin main
+            cp .env.production .env
+            docker compose -f docker-compose-prod.yml down
+            docker compose -f docker-compose-prod.yml up -d --build
+            docker exec -t laravelooo_app_prod composer install --no-interaction --optimize-autoloader --no-dev
+            docker exec -t laravelooo_app_prod php artisan migrate --force
+            docker exec -t laravelooo_app_prod php artisan config:cache
+            docker exec -t laravelooo_app_prod php artisan route:cache
+            docker exec -t laravelooo_app_prod php artisan view:cache 

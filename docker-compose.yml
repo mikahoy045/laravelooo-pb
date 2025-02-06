@@ -1,0 +1,75 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravelooo_app
+    env_file:
+      - .env
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./storage:/var/www/storage      
+      - ./vendor:/var/www/vendor
+      - ./bootstrap/cache:/var/www/bootstrap/cache
+    networks:
+      - app-network
+    command: >
+      bash -c "
+        chown -R www-data:www-data /var/www/storage &&
+        chmod -R 775 /var/www/storage &&
+        chown -R www-data:www-data /var/www/bootstrap/cache &&
+        chmod -R 775 /var/www/bootstrap/cache &&
+        php artisan migrate:fresh &&
+        php artisan db:seed &&
+        php artisan config:clear &&
+        php artisan config:cache &&
+        /usr/sbin/php-fpm8.3 -F"
+
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    container_name: laravel_nginx
+    env_file:
+      - .env
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./:/var/www
+    depends_on:
+      - app
+    networks:
+      - app-network
+
+  db:
+    image: mariadb:latest
+    container_name: laravel_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: upandrunning
+      MYSQL_ROOT_PASSWORD: pr0ject
+    volumes:
+      - dbdata:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - app-network
+
+  redis:
+    image: redis:alpine
+    container_name: laravel_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  dbdata: 

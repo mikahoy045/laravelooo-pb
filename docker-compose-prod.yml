@@ -1,0 +1,64 @@
+services:
+  app-pd:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravelooo_app_prod
+    env_file:
+      - .env
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./storage:/var/www/storage      
+      - ./vendor:/var/www/vendor
+      - ./bootstrap/cache:/var/www/bootstrap/cache
+    networks:
+      - app-network-prod
+
+  nginx-pd:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile-nginx-pd
+    container_name: laravel_nginx_prod
+    env_file:
+      - .env
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./:/var/www
+    depends_on:
+      - app-pd
+    networks:
+      - app-network-prod
+
+  db-pd:
+    image: mariadb:latest
+    container_name: laravel_db_prod
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: upandrunning
+      MYSQL_ROOT_PASSWORD: pr0ject
+    volumes:
+      - dbdata_prod:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    networks:
+      - app-network-prod
+
+  redis-pd:
+    image: redis:alpine
+    container_name: laravel_redis_prod
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    networks:
+      - app-network-prod
+
+networks:
+  app-network-prod:
+    driver: bridge
+
+volumes:
+  dbdata_prod: 

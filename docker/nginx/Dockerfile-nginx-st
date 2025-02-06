@@ -1,0 +1,11 @@
+FROM nginx:alpine
+
+COPY docker/nginx/nginx-stag.conf /etc/nginx/conf.d/default.conf
+
+WORKDIR /var/www
+
+# RUN adduser -g www-data -s /bin/sh -D www-data
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

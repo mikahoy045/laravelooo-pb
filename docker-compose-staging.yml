@@ -1,0 +1,64 @@
+services:
+  app-st:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravelooo_app_staging
+    env_file:
+      - .env
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./storage:/var/www/storage      
+      - ./vendor:/var/www/vendor
+      - ./bootstrap/cache:/var/www/bootstrap/cache
+    networks:
+      - app-network-staging
+
+  nginx-st:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile-nginx-st
+    container_name: laravel_nginx_staging
+    env_file:
+      - .env
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./:/var/www
+    depends_on:
+      - app-st
+    networks:
+      - app-network-staging
+
+  db-st:
+    image: mariadb:latest
+    container_name: laravel_db_staging
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: upandrunning
+      MYSQL_ROOT_PASSWORD: pr0ject
+    volumes:
+      - dbdata_staging:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - app-network-staging
+
+  redis-st:
+    image: redis:alpine
+    container_name: laravel_redis_staging
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network-staging
+
+networks:
+  app-network-staging:
+    driver: bridge
+
+volumes:
+  dbdata_staging: 

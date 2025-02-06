@@ -1,0 +1,37 @@
+services:
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    env_file:
+      - .env.testing  
+    entrypoint: ["tail", "-f", "/dev/null"]
+    depends_on:
+      test-db:
+        condition: service_started
+      test-redis:
+        condition: service_started
+    networks:
+      - test-network
+
+  test-db:
+    image: mariadb:latest
+    environment:
+      MYSQL_DATABASE: testing
+      MYSQL_ROOT_PASSWORD: pr0ject
+      MYSQL_ALLOW_EMPTY_PASSWORD: "no"
+    ports:
+      - "3310:3306"
+    networks:
+      - test-network
+
+  test-redis:
+    image: redis:alpine
+    ports:
+      - "6380:6379"
+    networks:
+      - test-network
+
+networks:
+  test-network:
+    driver: bridge 
