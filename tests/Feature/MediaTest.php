@@ -408,7 +408,7 @@ class MediaTest extends TestCase
 
         $response->assertStatus(404)
             ->assertJson([
-                'message' => 'No query results for model [App\Models\Media] 99999'
+                'message' => 'Media not found'
             ]);
     }
 
