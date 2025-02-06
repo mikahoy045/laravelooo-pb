@@ -192,10 +192,12 @@ class MediaController extends Controller
      *     @OA\Response(response=404, description="Not found")
      * )
      */
-    public function show(Media $media)
+    public function show($id)
     {
         try {
-            if (!$media->exists) {
+            $media = Media::find($id);
+            
+            if (!$media) {
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Media not found'
